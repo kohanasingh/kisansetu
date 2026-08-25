@@ -1,0 +1,21 @@
+<!-- demo.html — the live demo, on its own page (not part of landing.html).
+
+Build strictly from DESIGN.md "2. web/demo.html": three EQUAL-width
+columns (1fr 1fr 1fr), each with a matching icon+label header row and an
+identical 400px panel height —
+  1. Farmer · WhatsApp   (WhatsApp-accurate mimic; keeps WhatsApp's own
+     colors, NOT the brand palette. Voice messages are a plain audio
+     scrubber, no waveform bars.)
+  2. FPO Dashboard       (browser-frame; advisory cards update live as
+     the chat progresses)
+  3. Demo Controls       (button stack; active filled, rest outlined;
+     "Reset entire demo" pinned to bottom)
+Plus a full-width "What's happening" explanation strip beneath them.
+
+CRITICAL: the chat is a REAL live agent — a judge can speak or type and
+get a genuine grounded answer. The control buttons only simulate
+external events (climate alert firing, FPO uploading a batch) that a
+conversation can't produce on its own. UI copy must never imply the
+chat is scripted playback.
+
+Static HTML/JS + Tailwind CDN, no build step. -->

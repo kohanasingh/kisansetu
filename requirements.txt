@@ -1,0 +1,4 @@
+# fastapi, uvicorn, openai, httpx, pandas, openpyxl, python-dotenv,
+# python-multipart
+# (pin versions once implementation starts; keep this accurate to what
+#  is actually imported, not aspirational)

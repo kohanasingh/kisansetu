@@ -1,0 +1,26 @@
+# Internal planning docs — not part of the shipped repo
+ARCHITECTURE.md
+CLAUDE.md
+DESIGN.md
+BUILD_PROMPT.md
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+env/
+*.egg-info/
+.pytest_cache/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

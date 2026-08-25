@@ -1,0 +1,15 @@
+<!-- fpo.html — the FPO staff dashboard, its own page. No login (auth is
+deferred; this page is reachable directly).
+
+Build strictly from DESIGN.md "3. web/fpo.html": brand-colored left
+sidebar (Overview / Farmers / Upload Data / Advisory / Ask KisanSetu),
+a header row with a live climate-alert card, four stat cards, then a
+1.3fr/1fr split of the "Advisory for your farmers" panel and the
+"Recent uploads" panel.
+
+The uploads panel must visibly express the human-approval gate —
+"Nothing is saved until you approve it", a pending file with
+Review/Discard actions — because agents/ingestion.py never auto-merges
+(see CLAUDE.md hard constraints).
+
+Static HTML/JS + Tailwind CDN, no build step. -->
