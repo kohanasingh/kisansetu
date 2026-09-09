@@ -6,7 +6,7 @@ KisanSetu is a **Smart India Hackathon (SIH) 2025 winning project**. It turns th
 
 ## The problem
 
-India's agricultural value chain is broken at the information layer, not the production layer. FPOs already hold years of records — yields, land sizes, crops, farmer phone numbers — that sit in filing cabinets nobody opens. Farmers, meanwhile, are often guessing: what to grow, where to sell it, what their soil actually suits, what MSP (Minimum Support Price) they're entitled to, which government scheme they qualify for. Those schemes and subsidies go unclaimed not because they don't exist, but because the person eligible for one never hears about it. The data to fix this already exists on both sides — it just never gets connected.
+India's agricultural value chain is broken at the information layer, not the production layer. FPOs already hold years of records — yields, land sizes, crops, farmer phone numbers — that sit in filing cabinets nobody opens. Farmers, meanwhile, are often guessing: what to grow, where to sell it, what their soil actually suits, what MSP (Minimum Selling Price) they're entitled to, which government scheme they qualify for. Those schemes and subsidies go unclaimed not because they don't exist, but because the person eligible for one never hears about it. The data to fix this already exists on both sides — it just never gets connected.
 
 ## What KisanSetu does
 
@@ -117,7 +117,7 @@ Two Cloud Run configurations are documented in [`deploy/cloud_run.md`](deploy/cl
 
 The always-on config remains available as a documented future-scaling path if steady traffic ever justifies it; it isn't in use right now.
 
-## Known limitations / out of scope
+## Further scope, not implemented yet
 
 These are deliberate scope decisions for a prototype, not oversights:
 
@@ -127,12 +127,6 @@ These are deliberate scope decisions for a prototype, not oversights:
 - **No login or authentication anywhere** — the FPO dashboard is reachable directly by anyone with the URL, by design, for this stage.
 - **The real WhatsApp transport is implemented, not stub code, but hasn't been verified against a live Meta Business number.** Every request it makes matches Meta's documented API shape and was tested as far as possible without real credentials; the `/demo` page is the way to exercise the identical logic today.
 
-## Screenshots
-
-<!-- Add real screenshots here: landing page, /demo three-column view, /fpo dashboard -->
-<!-- ![Landing page](docs/screenshots/landing.png) -->
-<!-- ![Live demo](docs/screenshots/demo.png) -->
-<!-- ![FPO dashboard](docs/screenshots/fpo.png) -->
 
 ## License
 
