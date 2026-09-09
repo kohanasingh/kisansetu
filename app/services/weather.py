@@ -11,6 +11,8 @@ import logging
 
 import httpx
 
+from app.retry import with_retry
+
 logger = logging.getLogger("kisansetu.weather")
 
 FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
@@ -24,22 +26,34 @@ STORM_WEATHERCODES = {95, 96, 99}  # WMO thunderstorm codes -> storm
 DROUGHT_TOTAL_MM = 2.0      # total precip across the whole window under this -> drought risk
 
 
+class WeatherError(Exception):
+    """Raised after retries are exhausted fetching an Open-Meteo forecast."""
+
+
 async def get_forecast(lat: float, lon: float) -> dict | None:
-    """Real Open-Meteo daily forecast. Returns None on any network/API
-    failure — callers must treat that as 'no alert this tick', never as
-    license to fabricate one."""
+    """Real Open-Meteo daily forecast, retried with backoff (same pattern
+    as every LLM call in app/llm.py) before giving up. Returns None only
+    once retries are exhausted — callers must treat that as 'no alert this
+    tick', never as license to fabricate one."""
     params = {
         "latitude": lat, "longitude": lon,
         "daily": "precipitation_sum,wind_speed_10m_max,weathercode",
         "forecast_days": FORECAST_DAYS, "timezone": "auto",
     }
-    try:
+
+    async def call():
         async with httpx.AsyncClient(timeout=15) as http:
             resp = await http.get(FORECAST_URL, params=params)
             resp.raise_for_status()
             return resp.json()
-    except Exception:  # noqa: BLE001 — a weather outage must never crash the check
-        logger.exception("open-meteo forecast fetch failed for (%s, %s)", lat, lon)
+
+    try:
+        return await with_retry(
+            call, what=f"weather.get_forecast({lat},{lon})",
+            exceptions=(httpx.HTTPError,), error_cls=WeatherError,
+        )
+    except WeatherError:
+        logger.exception("open-meteo forecast fetch failed for (%s, %s) after retries", lat, lon)
         return None
 
 

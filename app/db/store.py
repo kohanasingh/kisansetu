@@ -126,7 +126,18 @@ def add_farmers(fpo_id: str, rows: list[dict]) -> list[dict]:
     """Merge FPO-approved ingestion rows into the in-memory farmer roster.
     Only called by agents/ingestion.py, and only after FPO staff approve a
     staged batch — nothing here auto-merges. In-memory only, like the rest
-    of this prototype's dataset (see CLAUDE.md's "No real FPO data")."""
+    of this prototype's dataset (see CLAUDE.md's "No real FPO data").
+
+    No asyncio.Lock guarding this (or add_alert below) is deliberate, not
+    an oversight: every mutation here is a plain synchronous list append
+    with no `await` inside it, so under asyncio's single-threaded
+    cooperative model nothing can interleave mid-mutation — concurrent
+    callers (e.g. agents/climate.py's asyncio.gather over multiple FPOs)
+    are safe today. That stops being true the moment either (a) a mutation
+    gets an `await` inside it, or (b) this module is swapped for a real
+    async DB client (its whole reason for existing with this signature
+    shape) — either one reintroduces a real race and would need a lock.
+    """
     fpo = get_fpo(fpo_id)
     added = []
     for row in rows:

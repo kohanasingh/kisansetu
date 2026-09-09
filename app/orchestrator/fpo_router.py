@@ -20,7 +20,7 @@ import logging
 from app.agentlog import log_event
 from app.agents import advisory, ingestion
 from app.db import store
-from app.llm import LLMError, chat_json, load_prompt
+from app.llm import NO_ANSWER_FALLBACK, LLMError, chat_json, load_prompt
 
 logger = logging.getLogger("kisansetu.fpo_router")
 
@@ -50,8 +50,8 @@ def _advisory_subtype(text: str) -> str:
     return "advisory"
 
 
-def _fpo_facts(fpo_id: str) -> dict:
-    fpo = store.get_fpo(fpo_id)
+def _fpo_facts(fpo: dict) -> dict:
+    fpo_id = fpo["id"]
     farmers = store.list_farmers(fpo_id)
     pending = [b for b in ingestion.list_batches(fpo_id) if b["status"] == "pending"]
     return {
@@ -79,11 +79,11 @@ async def answer(fpo_id: str, question: str) -> str:
         fn = {"storage": advisory.storage, "scheme": advisory.schemes}.get(subtype, advisory.crop_plan)
         return await fn(question, **kwargs)
 
-    facts = _fpo_facts(fpo_id)
+    facts = _fpo_facts(fpo)
     user_content = json.dumps({"question": question, "facts": facts}, ensure_ascii=False)
     try:
         result = await chat_json(load_prompt("fpo_general_answer"), user_content, what="fpo_router.answer")
-        return result.get("reply") or "I'm sorry, I couldn't work out an answer to that."
+        return result.get("reply") or NO_ANSWER_FALLBACK
     except LLMError:
         logger.exception("fpo_router general answer failed")
         return "I'm having trouble answering right now — please try again."

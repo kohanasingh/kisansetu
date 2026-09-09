@@ -9,6 +9,11 @@ won't be exercised end-to-end without real Meta credentials
 currently blank per .env.example — see CLAUDE.md "Tier 2"), but nothing
 here is mocked or faked.
 
+Every Graph API call goes through _get_with_retry/_post_with_retry, which
+share the same retry/backoff pattern as every LLM call in app/llm.py (via
+app/retry.py) — a transient network blip talking to Meta no longer drops
+a message or reply silently.
+
 OutboundMessage.buttons isn't sent as a WhatsApp interactive message yet —
 no agent in this codebase populates .buttons today (see
 orchestrator/farmer_router.py), so there is nothing real to wire it to.
@@ -21,11 +26,16 @@ import os
 
 import httpx
 
+from app.retry import with_retry
 from app.transports.base import InboundMessage, OutboundMessage, Transport
 
 logger = logging.getLogger("kisansetu.whatsapp")
 
 GRAPH_API_VERSION = "v20.0"
+
+
+class WhatsAppError(Exception):
+    """Raised after retries are exhausted talking to Meta's Graph API."""
 
 
 def _token() -> str:
@@ -44,26 +54,71 @@ def verify_webhook(mode: str | None, token: str | None, challenge: str | None) -
     """Meta's GET handshake when the webhook URL is registered: echo
     `challenge` back only if mode is 'subscribe' and `token` matches our
     configured verify token. Returns None (caller should 403) otherwise."""
-    if mode == "subscribe" and _verify_token() and token == _verify_token():
+    expected = _verify_token()
+    if mode == "subscribe" and expected and token == expected:
         return challenge
     return None
 
 
+async def _get_with_retry(http: httpx.AsyncClient, url: str, *, what: str, **kwargs) -> httpx.Response:
+    async def call():
+        resp = await http.get(url, **kwargs)
+        resp.raise_for_status()
+        return resp
+    return await with_retry(call, what=what, exceptions=(httpx.HTTPError,), error_cls=WhatsAppError)
+
+
+async def _post_with_retry(http: httpx.AsyncClient, url: str, *, what: str, **kwargs) -> httpx.Response:
+    async def call():
+        resp = await http.post(url, **kwargs)
+        resp.raise_for_status()
+        return resp
+    return await with_retry(call, what=what, exceptions=(httpx.HTTPError,), error_cls=WhatsAppError)
+
+
 async def _fetch_media(media_id: str) -> tuple[bytes, str] | None:
     """Resolve a Meta media id to raw bytes via two authenticated Graph API
-    calls (id -> short-lived URL -> bytes), per Meta's media API."""
+    calls (id -> short-lived URL -> bytes), per Meta's media API. Returns
+    None if either call fails even after retries."""
     token = _token()
     if not token:
         logger.error("WHATSAPP_TOKEN not configured; cannot fetch media id=%s", media_id)
         return None
     headers = {"Authorization": f"Bearer {token}"}
-    async with httpx.AsyncClient(timeout=20) as http:
-        meta_resp = await http.get(f"https://graph.facebook.com/{GRAPH_API_VERSION}/{media_id}", headers=headers)
-        meta_resp.raise_for_status()
-        meta = meta_resp.json()
-        bytes_resp = await http.get(meta["url"], headers=headers)
-        bytes_resp.raise_for_status()
-        return bytes_resp.content, meta.get("mime_type", "audio/ogg")
+    try:
+        async with httpx.AsyncClient(timeout=20) as http:
+            meta_resp = await _get_with_retry(
+                http, f"https://graph.facebook.com/{GRAPH_API_VERSION}/{media_id}",
+                what=f"whatsapp.fetch_media_meta[{media_id}]", headers=headers,
+            )
+            meta = meta_resp.json()
+            bytes_resp = await _get_with_retry(
+                http, meta["url"], what=f"whatsapp.fetch_media_bytes[{media_id}]", headers=headers,
+            )
+            return bytes_resp.content, meta.get("mime_type", "audio/ogg")
+    except WhatsAppError:
+        logger.exception("failed to fetch whatsapp media id=%s after retries", media_id)
+        return None
+
+
+async def _media_inbound_message(msg: dict, media_field: str, msg_type: str, sender: str,
+                                  *, caption_field: str | None = None) -> InboundMessage | None:
+    """Shared by the 'audio' and 'image' webhook branches — both fetch a
+    media id and build an InboundMessage the same way, differing only in
+    the message type and whether a caption is attached."""
+    media_id = msg.get(media_field, {}).get("id")
+    if not media_id:
+        return None
+    fetched = await _fetch_media(media_id)
+    if fetched is None:
+        logger.warning("could not fetch whatsapp %s media id=%s", media_field, media_id)
+        return None
+    media_bytes, mime = fetched
+    caption = msg.get(media_field, {}).get(caption_field) if caption_field else None
+    return InboundMessage(
+        sender=sender, type=msg_type, media=media_bytes, media_mime=mime,
+        text=caption, transport="whatsapp_cloud",
+    )
 
 
 async def parse_webhook_event(payload: dict) -> list[InboundMessage]:
@@ -84,27 +139,15 @@ async def parse_webhook_event(payload: dict) -> list[InboundMessage]:
                         transport="whatsapp_cloud",
                     ))
                 elif msg_type == "audio":
-                    media_id = msg.get("audio", {}).get("id")
-                    fetched = await _fetch_media(media_id) if media_id else None
-                    if fetched:
-                        media_bytes, mime = fetched
-                        messages.append(InboundMessage(
-                            sender=sender, type="audio", media=media_bytes, media_mime=mime,
-                            transport="whatsapp_cloud",
-                        ))
-                    else:
-                        logger.warning("could not fetch whatsapp audio media id=%s", media_id)
+                    inbound = await _media_inbound_message(msg, "audio", "audio", sender)
+                    if inbound:
+                        messages.append(inbound)
                 elif msg_type == "image":
-                    media_id = msg.get("image", {}).get("id")
-                    fetched = await _fetch_media(media_id) if media_id else None
-                    if fetched:
-                        media_bytes, mime = fetched
-                        messages.append(InboundMessage(
-                            sender=sender, type="image", media=media_bytes, media_mime=mime,
-                            text=msg.get("image", {}).get("caption"), transport="whatsapp_cloud",
-                        ))
-                    else:
-                        logger.warning("could not fetch whatsapp image media id=%s", media_id)
+                    inbound = await _media_inbound_message(
+                        msg, "image", "image", sender, caption_field="caption",
+                    )
+                    if inbound:
+                        messages.append(inbound)
                 elif msg_type == "interactive":
                     reply = (msg.get("interactive", {}).get("button_reply")
                              or msg.get("interactive", {}).get("list_reply"))
@@ -131,33 +174,37 @@ class WhatsAppCloudTransport(Transport):
         base_url = f"https://graph.facebook.com/{GRAPH_API_VERSION}/{phone_id}/messages"
         headers = {"Authorization": f"Bearer {token}"}
         async with httpx.AsyncClient(timeout=20) as http:
-            resp = await http.post(base_url, headers=headers, json={
-                "messaging_product": "whatsapp", "to": message.to,
-                "type": "text", "text": {"body": message.text},
-            })
-            if resp.status_code >= 400:
-                logger.error("whatsapp send text failed (%s): %s", resp.status_code, resp.text)
+            try:
+                await _post_with_retry(http, base_url, what="whatsapp.send_text", headers=headers, json={
+                    "messaging_product": "whatsapp", "to": message.to,
+                    "type": "text", "text": {"body": message.text},
+                })
+            except WhatsAppError:
+                logger.exception("whatsapp send text failed after retries (to=%s)", message.to)
 
             # WhatsApp has no single message type carrying both text and
             # audio, so a TTS voice note goes out as a second message.
             if message.audio_bytes:
                 media_id = await self._upload_media(http, headers, phone_id, message.audio_bytes)
                 if media_id:
-                    resp = await http.post(base_url, headers=headers, json={
-                        "messaging_product": "whatsapp", "to": message.to,
-                        "type": "audio", "audio": {"id": media_id},
-                    })
-                    if resp.status_code >= 400:
-                        logger.error("whatsapp send audio failed (%s): %s", resp.status_code, resp.text)
+                    try:
+                        await _post_with_retry(http, base_url, what="whatsapp.send_audio", headers=headers, json={
+                            "messaging_product": "whatsapp", "to": message.to,
+                            "type": "audio", "audio": {"id": media_id},
+                        })
+                    except WhatsAppError:
+                        logger.exception("whatsapp send audio failed after retries (to=%s)", message.to)
 
     async def _upload_media(self, http: httpx.AsyncClient, headers: dict, phone_id: str,
                              audio_bytes: bytes) -> str | None:
         url = f"https://graph.facebook.com/{GRAPH_API_VERSION}/{phone_id}/media"
-        resp = await http.post(
-            url, headers=headers, data={"messaging_product": "whatsapp"},
-            files={"file": ("note.ogg", audio_bytes, "audio/ogg")},
-        )
-        if resp.status_code >= 400:
-            logger.error("whatsapp media upload failed (%s): %s", resp.status_code, resp.text)
+        try:
+            resp = await _post_with_retry(
+                http, url, what="whatsapp.upload_media", headers=headers,
+                data={"messaging_product": "whatsapp"},
+                files={"file": ("note.ogg", audio_bytes, "audio/ogg")},
+            )
+            return resp.json().get("id")
+        except WhatsAppError:
+            logger.exception("whatsapp media upload failed after retries")
             return None
-        return resp.json().get("id")

@@ -34,7 +34,7 @@ import json
 
 from app.agentlog import log_event
 from app.db import store
-from app.llm import GeminiError, chat_json, chat_json_gemini, load_prompt
+from app.llm import NO_ANSWER_FALLBACK, GeminiError, chat_json, chat_json_gemini, load_prompt
 from app.services.geo import haversine_km
 
 
@@ -57,7 +57,16 @@ def _farmer_brief(farmer: dict | None) -> dict | None:
     }
 
 
-_NO_ANSWER = "I'm sorry, I couldn't work out an answer to that."
+def _base_payload(question: str, language_code: str, language_name: str, identity_ctx: dict) -> dict:
+    """Fields every advisory function's payload shares — each function
+    adds only its own extra fields (candidates / region+crop_records /
+    region) on top of this."""
+    return {
+        "question": question, "language_code": language_code, "language_name": language_name,
+        "farmer": _farmer_brief(identity_ctx.get("farmer")),
+        "personalized": identity_ctx.get("personalized", False),
+        "personalization_note": identity_ctx.get("note", ""),
+    }
 
 
 def storage_candidates(fpo_id: str, farmer: dict | None) -> list[dict]:
@@ -86,13 +95,11 @@ async def storage(question: str, *, language_code: str, language_name: str,
     candidates = storage_candidates(fpo["id"], farmer) if fpo else []
 
     payload = {
-        "question": question, "language_code": language_code, "language_name": language_name,
-        "farmer": _farmer_brief(farmer), "candidates": candidates,
-        "personalized": identity_ctx.get("personalized", False),
-        "personalization_note": identity_ctx.get("note", ""),
+        **_base_payload(question, language_code, language_name, identity_ctx),
+        "candidates": candidates,
     }
     result = await _reason("advisory_storage", payload, what="storage")
-    return result.get("reply") or _NO_ANSWER
+    return result.get("reply") or NO_ANSWER_FALLBACK
 
 
 async def crop_plan(question: str, *, language_code: str, language_name: str,
@@ -101,28 +108,21 @@ async def crop_plan(question: str, *, language_code: str, language_name: str,
     fpo = identity_ctx.get("fpo")
 
     payload = {
-        "question": question, "language_code": language_code, "language_name": language_name,
-        "farmer": _farmer_brief(farmer),
+        **_base_payload(question, language_code, language_name, identity_ctx),
         "region": fpo["region_name"] if fpo else None,
         "crop_records": store.crop_records_for_farmer(farmer["id"]) if farmer else [],
-        "personalized": identity_ctx.get("personalized", False),
-        "personalization_note": identity_ctx.get("note", ""),
     }
     result = await _reason("advisory_crop", payload, what="crop_plan")
-    return result.get("reply") or _NO_ANSWER
+    return result.get("reply") or NO_ANSWER_FALLBACK
 
 
 async def schemes(question: str, *, language_code: str, language_name: str,
                    identity_ctx: dict) -> str:
-    farmer = identity_ctx.get("farmer")
     fpo = identity_ctx.get("fpo")
 
     payload = {
-        "question": question, "language_code": language_code, "language_name": language_name,
-        "farmer": _farmer_brief(farmer),
+        **_base_payload(question, language_code, language_name, identity_ctx),
         "region": fpo["region_name"] if fpo else None,
-        "personalized": identity_ctx.get("personalized", False),
-        "personalization_note": identity_ctx.get("note", ""),
     }
     result = await _reason("advisory_schemes", payload, what="schemes")
-    return result.get("reply") or _NO_ANSWER
+    return result.get("reply") or NO_ANSWER_FALLBACK

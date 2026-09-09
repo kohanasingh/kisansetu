@@ -5,15 +5,30 @@ Serves three static pages from web/ (no build step):
   GET /demo               -> web/demo.html   (the live demo, its own page)
   GET /fpo                -> web/fpo.html    (FPO dashboard, no login)
   GET /health
+  GET /api/agentlog       -> live agent-activity feed (web/demo.html)
 
-APIs (Checkpoint 1 — farmer chat only; FPO/ingestion/climate APIs arrive
-with their agents in Tier 2):
-  POST /api/farmer/send  -> web-console send (text and/or a voice note)
-  GET  /api/farmer/poll  -> web-console poll, matching transports/web_console.py
+Farmer chat (both the web demo and real WhatsApp drive the identical
+orchestrator path — app/orchestrator/farmer_router.py):
+  POST /api/farmer/send   -> web-console send (text, voice note, or photo)
+  GET  /api/farmer/poll   -> web-console poll, matching transports/web_console.py
   GET  /api/farmer/audio/{id} -> serves TTS audio bytes stored in-memory
                                   by transports/web_console.py
-  GET  /webhook/whatsapp -> Meta webhook verification handshake
-  POST /webhook/whatsapp -> real Meta WhatsApp Cloud API webhook (Tier 2)
+  GET  /api/farmer/dashboard  -> web/demo.html's FPO Dashboard column state
+  GET  /webhook/whatsapp  -> Meta webhook verification handshake
+  POST /webhook/whatsapp  -> real Meta WhatsApp Cloud API webhook
+  POST /demo/reset        -> wipe in-memory session state for a fresh demo run
+
+Climate Watch (app/agents/climate.py + app/jobs/scheduler.py):
+  POST /api/climate/check -> on-demand real Open-Meteo check (the /demo trigger)
+
+FPO dashboard + staff chatbot (app/orchestrator/fpo_router.py) + ingestion
+(app/agents/ingestion.py, staged review before anything reaches
+db/store.py's farmer roster):
+  GET  /api/fpo/list, /api/fpo/overview, /api/fpo/advisory
+  POST /api/fpo/chat
+  POST /api/fpo/upload, /api/fpo/upload-sample
+  GET  /api/fpo/uploads
+  POST /api/fpo/uploads/{id}/approve, /api/fpo/uploads/{id}/discard
 
 send/poll rather than a synchronous reply: the orchestrator call runs as a
 background job (app/jobs/queue.py) so the request returns immediately and
@@ -27,14 +42,14 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+import asyncio
 import logging
+import time
 from pathlib import Path
 
 from fastapi import FastAPI, File, Form, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
-
-import time
 
 from app.agentlog import clear as clear_agentlog, recent as recent_agentlog
 from app.agents import advisory, climate, ingestion
@@ -68,6 +83,15 @@ async def on_startup() -> None:
     require_openai_key()
     scheduler.start()
     logger.info("KisanSetu startup complete.")
+
+
+@app.on_event("shutdown")
+async def on_shutdown() -> None:
+    # Cloud Run sends SIGTERM on scale-down/redeploy — cancel the climate
+    # scheduler's background task cleanly instead of letting it get killed
+    # mid-tick.
+    scheduler.stop()
+    logger.info("KisanSetu shutdown complete.")
 
 
 @app.get("/health")
@@ -240,10 +264,12 @@ async def fpo_advisory(fpo_id: str) -> JSONResponse:
         "note": "FPO-wide overview, not specific to one farmer.",
     }
     kwargs = dict(language_code="en", language_name="English", identity_ctx=identity_ctx)
-    crop_plan, storage, schemes = (
-        await advisory.crop_plan("What should farmers in this FPO consider planting this season?", **kwargs),
-        await advisory.storage("Which warehouse has the most space available right now?", **kwargs),
-        await advisory.schemes("What government schemes are most relevant to farmers here?", **kwargs),
+    # Three independent LLM calls — run concurrently rather than stacking
+    # each one's latency (and any retry/fallback delay) on top of the last.
+    crop_plan, storage, schemes = await asyncio.gather(
+        advisory.crop_plan("What should farmers in this FPO consider planting this season?", **kwargs),
+        advisory.storage("Which warehouse has the most space available right now?", **kwargs),
+        advisory.schemes("What government schemes are most relevant to farmers here?", **kwargs),
     )
     return JSONResponse({"crop_plan": crop_plan, "storage": storage, "schemes": schemes})
 

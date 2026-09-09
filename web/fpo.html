@@ -7,17 +7,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/theme.css">
 <script src="https://cdn.tailwindcss.com"></script>
 <style>
-  :root {
-    --ks-brand: #9F5523; --ks-amber: #C9761F; --ks-bg: #FDFBF7; --ks-bg-alt: #FAF5ED;
-    --ks-ink: #2A1E14; --ks-body: #4A3B2E; --ks-muted: #7A6553; --ks-line: #EFE7DC;
-    --ks-card: #FFFFFF;
-  }
-  * { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
-  body { background: var(--ks-bg); color: var(--ks-body); margin: 0; }
-  .warm-shadow { box-shadow: 0 2px 10px rgba(90,50,15,0.07); }
-  .card { background: var(--ks-card); border-radius: 12px; }
   .nav-item {
     display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 8px;
     color: rgba(255,255,255,0.85); font-size: 14px; font-weight: 500; cursor: default;
@@ -317,9 +309,9 @@ document.getElementById("ask-form").addEventListener("submit", async (e) => {
 
 (async () => {
   await loadFpoList();
-  await loadOverview();
-  await loadAdvisory();
-  await loadUploads();
+  // Independent fetches (each only needs currentFpoId, set above) — run
+  // them concurrently instead of stacking their latency.
+  await Promise.all([loadOverview(), loadAdvisory(), loadUploads()]);
 })();
 </script>
 

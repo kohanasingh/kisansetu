@@ -21,8 +21,8 @@ client directly — always through here. See CLAUDE.md.
 
 from __future__ import annotations
 
-import asyncio
 import base64
+import functools
 import json
 import logging
 import os
@@ -30,6 +30,8 @@ from pathlib import Path
 
 import httpx
 from openai import AsyncOpenAI, APIError, APITimeoutError, RateLimitError
+
+from app.retry import with_retry
 
 logger = logging.getLogger("kisansetu.llm")
 
@@ -41,6 +43,11 @@ GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-flash-lite-latest")
 GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
 PROMPTS_DIR = Path(__file__).parent / "prompts"
+
+# Shared fallback text for a grounded-answer agent that got an empty reply
+# from the model — agents/advisory.py, agents/farmer_query.py, and
+# orchestrator/fpo_router.py all use this instead of each defining their own.
+NO_ANSWER_FALLBACK = "I'm sorry, I couldn't work out an answer to that."
 
 _client: AsyncOpenAI | None = None
 
@@ -78,8 +85,12 @@ def client() -> AsyncOpenAI:
     return _client
 
 
+@functools.lru_cache(maxsize=None)
 def load_prompt(name: str) -> str:
-    """Load a versioned prompt file from app/prompts/ (never inline strings)."""
+    """Load a versioned prompt file from app/prompts/ (never inline strings).
+    Cached — prompt files are static for the life of the process, and this
+    is called on every single agent call, so an uncached disk read here
+    would block the event loop on every concurrent request."""
     return (PROMPTS_DIR / f"{name}.md").read_text(encoding="utf-8")
 
 
@@ -89,16 +100,11 @@ def image_content(image_bytes: bytes, mime: str = "image/jpeg", detail: str = "h
 
 
 async def _with_retry(coro_factory, what: str):
-    delay = 1.0
-    for attempt in range(3):
-        try:
-            return await coro_factory()
-        except (APIError, APITimeoutError, RateLimitError, json.JSONDecodeError) as e:
-            logger.warning("%s failed (attempt %d/3): %s", what, attempt + 1, e)
-            if attempt == 2:
-                raise LLMError(f"{what} failed after retries") from e
-            await asyncio.sleep(delay)
-            delay *= 2
+    return await with_retry(
+        coro_factory, what=what,
+        exceptions=(APIError, APITimeoutError, RateLimitError, json.JSONDecodeError),
+        error_cls=LLMError,
+    )
 
 
 async def chat_json(system_prompt: str, user_content, *, model: str = TEXT_MODEL,
@@ -164,16 +170,11 @@ async def _gemini_generate(system_prompt: str, user_content, *, model: str, want
 
 
 async def _with_retry_gemini(coro_factory, what: str):
-    delay = 1.0
-    for attempt in range(3):
-        try:
-            return await coro_factory()
-        except (httpx.HTTPError, GeminiError, json.JSONDecodeError) as e:
-            logger.warning("%s (gemini) failed (attempt %d/3): %s", what, attempt + 1, e)
-            if attempt == 2:
-                raise GeminiError(f"{what} failed after retries") from e
-            await asyncio.sleep(delay)
-            delay *= 2
+    return await with_retry(
+        coro_factory, what=f"{what} (gemini)",
+        exceptions=(httpx.HTTPError, GeminiError, json.JSONDecodeError),
+        error_cls=GeminiError,
+    )
 
 
 async def chat_json_gemini(system_prompt: str, user_content, *, model: str = GEMINI_MODEL,
