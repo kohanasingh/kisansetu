@@ -21,7 +21,7 @@ from __future__ import annotations
 import json
 
 from app.db import store
-from app.llm import chat_json, image_content, load_prompt
+from app.llm import NO_ANSWER_FALLBACK, chat_json, image_content, load_prompt
 
 
 def _build_facts(identity_ctx: dict) -> dict:
@@ -68,4 +68,4 @@ async def answer(question: str, *, language_code: str, language_name: str,
     result = await chat_json(
         load_prompt("farmer_general_answer"), user_content, what="farmer_query.answer",
     )
-    return result.get("reply") or "I'm sorry, I couldn't work out an answer to that."
+    return result.get("reply") or NO_ANSWER_FALLBACK

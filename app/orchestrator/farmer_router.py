@@ -3,13 +3,19 @@ transports/web_console.py (the /demo mimic) and
 transports/whatsapp_cloud.py (real WhatsApp).
 
 Runs orchestrator/identity.py first, then classifies intent + detects
-language via GPT-4o JSON-mode (app/prompts/farmer_intent.md), and dispatches
-to the matching agent: "storage"/"advisory"/"scheme" go to their
-agents/advisory.py counterpart (Gemini, with a GPT-4o fallback baked into
-that module — see CLAUDE.md's provider split); "alert" and "general" go to
-agents/farmer_query.py, since recent alerts are already part of its facts
-dict and agents/climate.py (which will own "alert" once built) isn't wired
-in yet.
+language via GPT-4o JSON-mode (app/prompts/farmer_intent.md), and dispatches:
+  - an attached photo (type "image") always goes to agents/farmer_query.py
+    for read-only GPT-4o Vision reasoning, regardless of classified intent
+    — never to advisory.
+  - "storage"/"advisory"/"scheme" go to their agents/advisory.py
+    counterpart (Gemini, with a GPT-4o fallback baked into that module —
+    see CLAUDE.md's provider split).
+  - "alert" and "general" go to agents/farmer_query.py: this is by design,
+    not a placeholder — agents/climate.py owns *raising* alerts (its own
+    scheduler tick / on-demand trigger), but a farmer *asking about* one
+    is answered from the same grounded facts dict farmer_query.py already
+    assembles (which includes db/store.py's recent alerts), so there's
+    nothing for climate.py itself to do at answer-time.
 
 This is a real conversational path, not a scripted demo sequence — the
 same code answers a judge clicking around /demo and a farmer messaging
@@ -125,6 +131,7 @@ async def handle_inbound(msg: InboundMessage, transport: Transport) -> None:
               {"text": text, "intent": classification["intent"], "language": language_code})
 
     identity_ctx = await identity.resolve(msg.sender, text)
+    fpo_id = (identity_ctx.get("fpo") or {}).get("id")
     log_event("identity", f"status={identity_ctx['status']}", identity_ctx.get("note"))
     dashboard_state.update(
         msg.sender, fpo=identity_ctx.get("fpo"), identity_status=identity_ctx["status"],
@@ -142,7 +149,6 @@ async def handle_inbound(msg: InboundMessage, transport: Transport) -> None:
             language_name=language_name, identity_ctx=identity_ctx,
             image_bytes=msg.media, image_mime=msg.media_mime or "image/jpeg",
         )
-        fpo_id = (identity_ctx.get("fpo") or {}).get("id")
         log_event("farmer_query", "answered a photo question", {"fpo_id": fpo_id})
         dashboard_state.update(
             msg.sender, step_note="Farmer Query agent answered a question about an attached photo.",
@@ -152,7 +158,6 @@ async def handle_inbound(msg: InboundMessage, transport: Transport) -> None:
             text or "", language_code=language_code, language_name=language_name,
             identity_ctx=identity_ctx,
         )
-        fpo_id = (identity_ctx.get("fpo") or {}).get("id")
         log_event("advisory", "answered", {"intent": intent, "fpo_id": fpo_id})
         dashboard_state.update(
             msg.sender, **{_DASHBOARD_FIELD[intent]: reply_text},
@@ -163,7 +168,6 @@ async def handle_inbound(msg: InboundMessage, transport: Transport) -> None:
             text or "", language_code=language_code, language_name=language_name,
             identity_ctx=identity_ctx,
         )
-        fpo_id = (identity_ctx.get("fpo") or {}).get("id")
         log_event("farmer_query", "answered", {"intent": intent, "fpo_id": fpo_id})
         dashboard_state.update(
             msg.sender, step_note="Farmer Query agent answered from the grounded facts dict.",

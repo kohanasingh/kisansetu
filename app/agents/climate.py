@@ -16,6 +16,7 @@ separate wiring needed for a farmer to hear about a new alert.
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -61,9 +62,10 @@ async def check_fpo(fpo: dict) -> dict | None:
 
 
 async def check_all_fpos() -> list[dict]:
-    new_alerts = []
-    for fpo in store.list_fpos():
-        alert = await check_fpo(fpo)
-        if alert:
-            new_alerts.append(alert)
-    return new_alerts
+    # Each FPO's check is an independent Open-Meteo call — run them
+    # concurrently rather than one at a time. Safe: check_fpo's only
+    # shared-state writes (store.add_alert) are plain synchronous list
+    # appends with no `await` inside them, so there's no interleaving
+    # risk under asyncio's cooperative model even run concurrently.
+    results = await asyncio.gather(*(check_fpo(fpo) for fpo in store.list_fpos()))
+    return [alert for alert in results if alert]
