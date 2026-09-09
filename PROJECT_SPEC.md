@@ -90,6 +90,18 @@ One file, three related outputs:
   demand signal, and weather/soil fit.
 - **Schemes**: which real government schemes fit a farmer/FPO profile.
 
+**Provider: Gemini (`gemini-flash-lite-latest`), not GPT-4o.** This is
+the one agent in the codebase that moves off OpenAI, to cut cost —
+everything else (intent classification, farmer_query, Whisper, TTS,
+Vision) stays on GPT-4o exactly as originally specified. Every call goes
+through `llm.chat_json_gemini()` / `llm.chat_text_gemini()` (same
+signature shape as their GPT-4o counterparts, so this file has no
+provider-specific branching). Resilience: retry with backoff first (same
+pattern as every other `app/llm.py` call); on continued Gemini failure,
+fall back to GPT-4o for that call rather than surfacing an error to the
+FPO, and log the fallback through `app/agentlog.py` so it's visible on
+the demo's agent-activity feed rather than silent.
+
 #### Sourcing MSP and schemes
 No `msp_price` or `scheme` table exists anywhere in this repo, by
 design. The prompts instruct the model to state real MSP figures and
@@ -126,8 +138,12 @@ Runs first on every farmer message. Four paths:
 
 ### Routers
 `farmer_router.py`: identity -> GPT-4o JSON-mode intent classification
-(advisory / storage / scheme / alert / general) -> dispatch.
+(advisory / storage / scheme / alert / general) -> dispatch. Intent
+classification stays on GPT-4o (fires on every message; must not be
+flaky) even though the `advisory` intent it may dispatch to is served by
+`agents/advisory.py` running on Gemini.
 `fpo_router.py`: no identity step needed; classify + dispatch for staff.
+Same rule — intent classification here stays GPT-4o too.
 
 ## Voice and language
 
@@ -139,9 +155,12 @@ their own language is the point of the product.
   otherwise (Whisper rejects hints for some languages and must not
   crash intake).
 - `gpt-4o-mini-tts` speaks replies back.
-- `services/translate.py` (Gemini flash-lite) covers languages where
-  GPT-4o's native output is weak — fail-open, so any error returns the
-  original text rather than breaking the reply.
+- `services/translate.py` (Gemini flash-lite, via `llm.chat_text_gemini()`)
+  covers languages where GPT-4o's native output is weak — fail-open, so
+  any error returns the original text rather than breaking the reply.
+  This and `agents/advisory.py` are the only two Gemini callers in the
+  codebase; everything else stays on GPT-4o (see CLAUDE.md hard
+  constraints).
 - A judge speaking Punjabi, Bengali, Tamil, or Marathi must get a
   coherent spoken reply in that language. Don't hardcode the reply path
   to Hindi/English.

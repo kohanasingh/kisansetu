@@ -1,15 +1,327 @@
-<!-- fpo.html — the FPO staff dashboard, its own page. No login (auth is
-deferred; this page is reachable directly).
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KisanSetu — FPO Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  :root {
+    --ks-brand: #9F5523; --ks-amber: #C9761F; --ks-bg: #FDFBF7; --ks-bg-alt: #FAF5ED;
+    --ks-ink: #2A1E14; --ks-body: #4A3B2E; --ks-muted: #7A6553; --ks-line: #EFE7DC;
+    --ks-card: #FFFFFF;
+  }
+  * { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
+  body { background: var(--ks-bg); color: var(--ks-body); margin: 0; }
+  .warm-shadow { box-shadow: 0 2px 10px rgba(90,50,15,0.07); }
+  .card { background: var(--ks-card); border-radius: 12px; }
+  .nav-item {
+    display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 8px;
+    color: rgba(255,255,255,0.85); font-size: 14px; font-weight: 500; cursor: default;
+  }
+  .nav-item.active { background: rgba(255,255,255,0.15); color: #fff; font-weight: 600; }
+  .stat-card { background: #fff; border-radius: 12px; padding: 18px; }
+  .stat-num { font-size: 26px; font-weight: 800; color: var(--ks-ink); }
+</style>
+</head>
+<body>
 
-Build strictly from DESIGN.md "3. web/fpo.html": brand-colored left
-sidebar (Overview / Farmers / Upload Data / Advisory / Ask KisanSetu),
-a header row with a live climate-alert card, four stat cards, then a
-1.3fr/1fr split of the "Advisory for your farmers" panel and the
-"Recent uploads" panel.
+<div class="flex min-h-screen">
 
-The uploads panel must visibly express the human-approval gate —
-"Nothing is saved until you approve it", a pending file with
-Review/Discard actions — because agents/ingestion.py never auto-merges
-(see CLAUDE.md hard constraints).
+  <!-- Sidebar -->
+  <aside class="w-60 flex-shrink-0 flex flex-col p-5 sticky top-0 h-screen" style="background: var(--ks-brand);">
+    <div class="flex items-center gap-2 mb-1">
+      <div class="w-8 h-8 rounded-full flex items-center justify-center bg-white/15">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M12 2c0 4-3 5-3 9a3 3 0 006 0c0-4-3-5-3-9z"/><path d="M12 13v9"/></svg>
+      </div>
+      <span class="text-white font-extrabold text-lg">KisanSetu</span>
+    </div>
+    <div class="mb-6">
+      <select id="fpo-select" class="w-full text-xs px-2 py-1.5 rounded mt-2 bg-transparent border" style="color: #F0CDA8; border-color: rgba(240,205,168,0.4);"></select>
+    </div>
+    <nav class="flex flex-col gap-1">
+      <div class="nav-item active">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+        Overview
+      </div>
+      <div class="nav-item">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="7" r="3"/><path d="M2 21v-2a5 5 0 015-5h4a5 5 0 015 5v2"/><circle cx="18" cy="8" r="2.5"/><path d="M16 21v-1.5a3.5 3.5 0 013.5-3.5H20"/></svg>
+        Farmers
+      </div>
+      <div class="nav-item">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0l-4-4m4 4l4-4"/><path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg>
+        Upload Data
+      </div>
+      <div class="nav-item">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M2 12h20"/></svg>
+        Advisory
+      </div>
+      <div class="nav-item" id="nav-ask" style="cursor: pointer;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/></svg>
+        Ask KisanSetu
+      </div>
+    </nav>
+  </aside>
 
-Static HTML/JS + Tailwind CDN, no build step. -->
+  <!-- Ask KisanSetu panel -->
+  <aside id="ask-panel" class="hidden w-80 flex-shrink-0 flex flex-col border-l sticky top-0 h-screen"
+         style="border-color: var(--ks-line); background: #fff;">
+    <div class="px-4 py-3 border-b flex items-center justify-between" style="border-color: var(--ks-line);">
+      <span class="font-semibold text-sm" style="color: var(--ks-ink);">Ask KisanSetu</span>
+      <button id="ask-close" class="text-sm" style="color: var(--ks-muted);">✕</button>
+    </div>
+    <div id="ask-log" class="flex-1 overflow-y-auto p-3 space-y-2 text-sm"></div>
+    <form id="ask-form" class="flex gap-2 p-3 border-t" style="border-color: var(--ks-line);">
+      <input id="ask-input" type="text" placeholder="Ask about your farmers, storage, schemes…"
+             class="flex-1 text-sm px-3 py-2 rounded-full border outline-none" style="border-color: var(--ks-line);">
+      <button type="submit" class="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0" style="background: var(--ks-brand);">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="#fff"><path d="M2 21l21-9L2 3v7l15 2-15 2z"/></svg>
+      </button>
+    </form>
+  </aside>
+
+  <!-- Main -->
+  <main class="flex-1 p-8 max-w-6xl">
+    <div class="flex items-start justify-between mb-6">
+      <div>
+        <h1 class="text-2xl font-bold" style="color: var(--ks-ink);">Overview</h1>
+        <p id="region-line" class="text-sm mt-1" style="color: var(--ks-muted);">Loading…</p>
+      </div>
+      <div id="alert-card"></div>
+    </div>
+
+    <!-- Stat cards -->
+    <div class="grid grid-cols-4 gap-4 mb-6">
+      <div class="stat-card warm-shadow">
+        <p class="text-xs font-medium uppercase" style="color: var(--ks-muted);">Member Farmers</p>
+        <p id="stat-farmers" class="stat-num mt-1">—</p>
+      </div>
+      <div class="stat-card warm-shadow">
+        <p class="text-xs font-medium uppercase" style="color: var(--ks-muted);">Land Covered</p>
+        <p id="stat-land" class="stat-num mt-1">—</p>
+      </div>
+      <div class="stat-card warm-shadow">
+        <p class="text-xs font-medium uppercase" style="color: var(--ks-muted);">Storage Available</p>
+        <p id="stat-storage" class="stat-num mt-1">—</p>
+      </div>
+      <div class="stat-card warm-shadow">
+        <p class="text-xs font-medium uppercase" style="color: var(--ks-muted);">Queries This Week</p>
+        <p id="stat-queries" class="stat-num mt-1">—</p>
+      </div>
+    </div>
+
+    <!-- Two column split -->
+    <div class="grid gap-5" style="grid-template-columns: 1.3fr 1fr;">
+      <div class="card warm-shadow p-5">
+        <h2 class="font-semibold" style="color: var(--ks-ink);">Advisory for your farmers</h2>
+        <p class="text-xs mt-1" style="color: var(--ks-muted);">FPO-wide recommendations, reasoned live from your seeded data.</p>
+        <div id="advisory-list" class="mt-4 space-y-4">
+          <p class="text-sm" style="color: var(--ks-muted);">Loading advisory reasoning (this calls the real agent)…</p>
+        </div>
+      </div>
+
+      <div class="card warm-shadow p-5">
+        <h2 class="font-semibold" style="color: var(--ks-ink);">Recent uploads</h2>
+        <p class="text-xs mt-1" style="color: var(--ks-muted);">Nothing is saved until you approve it.</p>
+        <div id="uploads-list" class="mt-4 space-y-3">
+          <p class="text-sm" style="color: var(--ks-muted);">Loading…</p>
+        </div>
+        <input type="file" id="upload-input" accept=".xlsx,.xls,.csv,.jpg,.jpeg,.png,.webp" class="hidden">
+        <div id="drop-zone" class="rounded-lg border-2 border-dashed flex items-center justify-center py-8 text-sm cursor-pointer mt-3"
+             style="border-color: var(--ks-line); color: var(--ks-muted);">
+          Drop an Excel/CSV file or scanned register photo here, or click to choose one
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+let currentFpoId = new URLSearchParams(location.search).get("fpo_id");
+
+async function loadFpoList() {
+  const res = await fetch("/api/fpo/list");
+  const fpos = await res.json();
+  const select = document.getElementById("fpo-select");
+  select.innerHTML = fpos.map(f => `<option value="${f.id}">${f.name}</option>`).join("");
+  if (!currentFpoId) currentFpoId = fpos[0].id;
+  select.value = currentFpoId;
+  select.addEventListener("change", () => {
+    currentFpoId = select.value;
+    loadOverview();
+    loadAdvisory();
+    loadUploads();
+  });
+}
+
+function alertCard(alert) {
+  if (!alert) return "";
+  return `<div class="rounded-lg px-4 py-3 max-w-sm" style="background:#FDF2E2; border-left: 3px solid #C9761F;">
+    <p class="text-xs font-bold" style="color:#9A6021;">⛈ ${alert.severity.toUpperCase()} ALERT</p>
+    <p class="text-sm mt-1" style="color: var(--ks-ink);">${alert.message}</p>
+  </div>`;
+}
+
+async function loadOverview() {
+  const res = await fetch(`/api/fpo/overview?fpo_id=${currentFpoId}`);
+  const data = await res.json();
+  document.getElementById("region-line").textContent = `${data.fpo.region_name} · current season`;
+  document.getElementById("stat-farmers").textContent = data.stats.member_farmers;
+  document.getElementById("stat-land").textContent = data.stats.land_covered_acres + " ac";
+  document.getElementById("stat-storage").textContent = data.stats.storage_available_quintal + " qtl";
+  document.getElementById("stat-queries").textContent = data.stats.queries_this_week;
+  document.getElementById("alert-card").innerHTML = alertCard(data.alerts[0]);
+}
+
+function advisoryEntry(label, text, color) {
+  return `<div class="pl-3" style="border-left: 3px solid ${color};">
+    <p class="text-[10px] font-bold uppercase tracking-wide" style="color:${color};">${label}</p>
+    <p class="text-sm mt-1" style="color: var(--ks-ink);">${text}</p>
+  </div>`;
+}
+
+async function loadAdvisory() {
+  const list = document.getElementById("advisory-list");
+  list.innerHTML = `<p class="text-sm" style="color: var(--ks-muted);">Loading advisory reasoning (this calls the real agent)…</p>`;
+  const res = await fetch(`/api/fpo/advisory?fpo_id=${currentFpoId}`);
+  const data = await res.json();
+  list.innerHTML =
+    advisoryEntry("Crop Plan", data.crop_plan, "#9F5523") +
+    advisoryEntry("Storage", data.storage, "#9F5523") +
+    advisoryEntry("Schemes", data.schemes, "#C9761F");
+}
+
+function escapeHtml(s) {
+  return String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+}
+
+function rowSummary(row) {
+  const bits = [row.name, row.village, (row.crops || []).join("/")].filter(Boolean);
+  const flag = row.confidence === "low" ? ' <span style="color:#B23A2E;">(needs a closer look)</span>' : "";
+  return escapeHtml(bits.join(" · ")) + flag;
+}
+
+function batchCard(batch) {
+  if (batch.status === "approved") {
+    return `<div class="rounded-lg p-3 flex items-center gap-2" style="background: #FBF8F3;">
+      <div class="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0" style="background: var(--ks-brand);">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3"><path d="M20 6L9 17l-5-5"/></svg>
+      </div>
+      <span class="text-sm" style="color: var(--ks-ink);">${escapeHtml(batch.source)} — ${batch.row_count} rows approved</span>
+    </div>`;
+  }
+  if (batch.status === "discarded") {
+    return `<div class="rounded-lg p-3 text-sm" style="background: #FBF8F3; color: var(--ks-muted); text-decoration: line-through;">
+      ${escapeHtml(batch.source)} — discarded
+    </div>`;
+  }
+  const rowsHtml = batch.rows.map(rowSummary).map(s => `<li>${s}</li>`).join("");
+  return `<div class="rounded-lg p-3" style="background: #FDFAF4; border: 1px solid #F0E2CE;">
+    <div class="flex items-center justify-between">
+      <span class="text-sm font-medium" style="color: var(--ks-ink);">${escapeHtml(batch.source)}</span>
+      <span class="text-xs" style="color: var(--ks-muted);">${batch.row_count} rows read · needs review</span>
+    </div>
+    <ul class="text-xs mt-2 space-y-0.5 list-disc pl-4" style="color: var(--ks-body);">${rowsHtml || "<li>No rows recognized</li>"}</ul>
+    <div class="flex gap-2 mt-3">
+      <button class="text-xs px-3 py-1.5 rounded-full font-medium" style="background: var(--ks-brand); color:#fff;" onclick="approveBatch('${batch.id}')">Approve</button>
+      <button class="text-xs px-3 py-1.5 rounded-full font-medium border" style="border-color: var(--ks-line); color: var(--ks-body);" onclick="discardBatch('${batch.id}')">Discard</button>
+    </div>
+  </div>`;
+}
+
+async function loadUploads() {
+  const res = await fetch(`/api/fpo/uploads?fpo_id=${currentFpoId}`);
+  const batches = await res.json();
+  const list = document.getElementById("uploads-list");
+  list.innerHTML = batches.length
+    ? batches.map(batchCard).join("")
+    : `<p class="text-sm" style="color: var(--ks-muted);">No uploads yet.</p>`;
+}
+
+async function uploadFile(file) {
+  const form = new FormData();
+  form.append("fpo_id", currentFpoId);
+  form.append("file", file);
+  const dz = document.getElementById("drop-zone");
+  const original = dz.textContent;
+  dz.textContent = "Reading file…";
+  try {
+    const res = await fetch("/api/fpo/upload", { method: "POST", body: form });
+    if (!res.ok) {
+      const err = await res.json();
+      alert("Could not read that file: " + (err.error || res.status));
+    }
+  } finally {
+    dz.textContent = original;
+    await loadUploads();
+  }
+}
+
+async function approveBatch(id) {
+  await fetch(`/api/fpo/uploads/${id}/approve`, { method: "POST" });
+  await loadUploads();
+  await loadOverview();
+}
+
+async function discardBatch(id) {
+  await fetch(`/api/fpo/uploads/${id}/discard`, { method: "POST" });
+  await loadUploads();
+}
+
+const dropZone = document.getElementById("drop-zone");
+const uploadInput = document.getElementById("upload-input");
+dropZone.addEventListener("click", () => uploadInput.click());
+uploadInput.addEventListener("change", () => {
+  if (uploadInput.files[0]) uploadFile(uploadInput.files[0]);
+  uploadInput.value = "";
+});
+dropZone.addEventListener("dragover", (e) => { e.preventDefault(); dropZone.style.borderColor = "var(--ks-brand)"; });
+dropZone.addEventListener("dragleave", () => { dropZone.style.borderColor = "var(--ks-line)"; });
+dropZone.addEventListener("drop", (e) => {
+  e.preventDefault();
+  dropZone.style.borderColor = "var(--ks-line)";
+  if (e.dataTransfer.files[0]) uploadFile(e.dataTransfer.files[0]);
+});
+
+const askPanel = document.getElementById("ask-panel");
+document.getElementById("nav-ask").addEventListener("click", () => askPanel.classList.toggle("hidden"));
+document.getElementById("ask-close").addEventListener("click", () => askPanel.classList.add("hidden"));
+
+function askBubble(text, outgoing) {
+  const div = document.createElement("div");
+  div.className = "rounded-lg px-3 py-2 max-w-[90%]" + (outgoing ? " ml-auto" : "");
+  div.style.background = outgoing ? "#FBF8F3" : "#F5EFE6";
+  div.style.color = "var(--ks-ink)";
+  div.textContent = text;
+  document.getElementById("ask-log").appendChild(div);
+  document.getElementById("ask-log").scrollTop = 1e9;
+}
+
+document.getElementById("ask-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const input = document.getElementById("ask-input");
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = "";
+  askBubble(text, true);
+  const form = new FormData();
+  form.append("fpo_id", currentFpoId);
+  form.append("text", text);
+  const res = await fetch("/api/fpo/chat", { method: "POST", body: form });
+  const data = await res.json();
+  askBubble(data.reply, false);
+});
+
+(async () => {
+  await loadFpoList();
+  await loadOverview();
+  await loadAdvisory();
+  await loadUploads();
+})();
+</script>
+
+</body>
+</html>

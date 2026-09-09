@@ -1,21 +1,476 @@
-<!-- demo.html — the live demo, on its own page (not part of landing.html).
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KisanSetu — Live Demo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Mukta:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  :root {
+    --ks-brand: #9F5523; --ks-amber: #C9761F; --ks-bg: #FDFBF7; --ks-bg-alt: #FAF5ED;
+    --ks-ink: #2A1E14; --ks-body: #4A3B2E; --ks-muted: #7A6553; --ks-line: #EFE7DC;
+    --ks-card: #FFFFFF;
+    --wa-header: #075E54; --wa-avatar: #128C7E; --wa-wallpaper: #E5DDD5;
+    --wa-out: #DCF8C6;
+  }
+  * { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
+  .mukta { font-family: 'Mukta', 'Inter', sans-serif; }
+  body { background: var(--ks-bg); color: var(--ks-body); margin: 0; }
+  .warm-shadow { box-shadow: 0 2px 10px rgba(90,50,15,0.07); }
+  .card { background: var(--ks-card); border-radius: 12px; }
+  .col-header { height: 20px; display: flex; align-items: center; gap: 8px; }
+  .panel { height: 400px; }
+  .chip {
+    display: inline-flex; align-items: center; font-size: 12.5px; padding: 6px 12px;
+    border-radius: 999px; border: 1px solid var(--ks-line); background: #fff;
+    color: var(--ks-body); cursor: pointer; white-space: nowrap;
+  }
+  .chip:hover { border-color: var(--ks-brand); color: var(--ks-brand); }
+  .ctrl-btn {
+    width: 100%; text-align: left; padding: 12px 16px; border-radius: 10px;
+    font-size: 13.5px; font-weight: 600; cursor: pointer; border: 1px solid var(--ks-line);
+    background: #fff; color: var(--ks-body); transition: all .15s ease;
+  }
+  .ctrl-btn:disabled { cursor: not-allowed; opacity: 0.55; }
+  .ctrl-btn.active { background: var(--ks-brand); color: #fff; border-color: var(--ks-brand); }
+  .scrubber { display: flex; align-items: center; gap: 8px; min-width: 170px; }
+  .scrubber-track { flex: 1; height: 4px; border-radius: 2px; background: rgba(0,0,0,0.15); position: relative; cursor: pointer; }
+  .scrubber-fill { height: 4px; border-radius: 2px; background: var(--wa-avatar); width: 0%; }
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-thumb { background: var(--ks-line); border-radius: 3px; }
+</style>
+</head>
+<body>
 
-Build strictly from DESIGN.md "2. web/demo.html": three EQUAL-width
-columns (1fr 1fr 1fr), each with a matching icon+label header row and an
-identical 400px panel height —
-  1. Farmer · WhatsApp   (WhatsApp-accurate mimic; keeps WhatsApp's own
-     colors, NOT the brand palette. Voice messages are a plain audio
-     scrubber, no waveform bars.)
-  2. FPO Dashboard       (browser-frame; advisory cards update live as
-     the chat progresses)
-  3. Demo Controls       (button stack; active filled, rest outlined;
-     "Reset entire demo" pinned to bottom)
-Plus a full-width "What's happening" explanation strip beneath them.
+<div class="max-w-7xl mx-auto px-6 py-8">
 
-CRITICAL: the chat is a REAL live agent — a judge can speak or type and
-get a genuine grounded answer. The control buttons only simulate
-external events (climate alert firing, FPO uploading a batch) that a
-conversation can't produce on its own. UI copy must never imply the
-chat is scripted playback.
+  <!-- Breadcrumb + Play Demo -->
+  <div class="flex items-center justify-between mb-6">
+    <p class="text-sm" style="color: var(--ks-muted);">
+      <a href="/" class="hover:opacity-70" style="color: var(--ks-muted);">Home</a> / KisanSetu · Live Demo
+    </p>
+    <div class="flex gap-2">
+      <button id="activity-btn" class="chip">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="mr-2"><path d="M3 12h4l3 8 4-16 3 8h4"/></svg>
+        Agent Activity
+      </button>
+      <button id="play-demo-btn" class="chip" style="background: var(--ks-brand); color: #fff; border-color: var(--ks-brand); font-weight: 600;">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" class="mr-2"><path d="M8 5v14l11-7z"/></svg>
+        Play Demo
+      </button>
+    </div>
+  </div>
 
-Static HTML/JS + Tailwind CDN, no build step. -->
+  <div class="grid md:grid-cols-3 gap-5">
+
+    <!-- Column 1: Farmer WhatsApp -->
+    <div>
+      <div class="col-header mb-2">
+        <div class="w-4 h-4 rounded-full" style="background: var(--ks-brand);"></div>
+        <span class="text-xs font-semibold uppercase tracking-wide" style="color: var(--ks-ink);">Farmer · WhatsApp</span>
+      </div>
+      <div class="card warm-shadow overflow-hidden panel flex flex-col">
+        <div class="flex items-center gap-3 px-4 py-3" style="background: var(--wa-header);">
+          <div class="w-9 h-9 rounded-full flex items-center justify-center text-white font-semibold" style="background: var(--wa-avatar);">KS</div>
+          <div>
+            <p class="text-white text-sm font-medium">KisanSetu Sahayak</p>
+            <p class="text-xs" style="color: #CFE8E3;" id="sender-label">online</p>
+          </div>
+        </div>
+        <div id="chat-log" class="flex-1 overflow-y-auto px-3 py-3 space-y-2" style="background: var(--wa-wallpaper);"></div>
+        <div class="px-3 py-2 flex gap-2 overflow-x-auto" style="background: var(--wa-wallpaper);">
+          <button class="chip" data-sample="Mera FPO Nashik Grape Growers hai, mujhe salah chahiye">Hindi</button>
+          <button class="chip" data-sample="ਮੈਨੂੰ ਸਟੋਰੇਜ ਬਾਰੇ ਜਾਣਕਾਰੀ ਚਾਹੀਦੀ ਹੈ">Punjabi</button>
+          <button class="chip" data-sample="எனக்கு அரசு திட்டங்கள் பற்றி தெரிந்துகொள்ள வேண்டும்">Tamil</button>
+          <button class="chip" data-sample="मला पुढील हंगामासाठी कोणते पीक घ्यावे ते सांगा">Marathi</button>
+        </div>
+        <form id="chat-form" class="flex items-center gap-2 px-3 py-3 border-t" style="background: #fff; border-color: var(--ks-line);">
+          <input id="chat-input" type="text" placeholder="Type a message, or attach a crop/soil photo"
+                 class="flex-1 text-sm px-3 py-2 rounded-full border outline-none" style="border-color: var(--ks-line);">
+          <input type="file" id="photo-input" accept="image/*" class="hidden">
+          <button type="button" id="photo-btn" class="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0" style="background: var(--wa-avatar);" title="Attach a crop or soil-report photo">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
+          </button>
+          <button type="button" id="mic-btn" class="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0" style="background: var(--wa-avatar);">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8"/></svg>
+          </button>
+          <button type="submit" class="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0" style="background: var(--wa-avatar);">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="#fff"><path d="M2 21l21-9L2 3v7l15 2-15 2z"/></svg>
+          </button>
+        </form>
+      </div>
+      <p class="text-xs mt-2" style="color: var(--ks-muted);">
+        Testing as <input id="sender-input" class="text-xs px-1 rounded border" style="border-color: var(--ks-line); width: 130px;">
+        <button id="sender-apply" class="underline" style="color: var(--ks-brand);">apply</button>
+        — try a seeded number (e.g. +919812345601), an FPO name, or a village.
+      </p>
+    </div>
+
+    <!-- Column 2: FPO Dashboard -->
+    <div>
+      <div class="col-header mb-2">
+        <div class="w-4 h-4 rounded-full" style="background: var(--ks-brand);"></div>
+        <span class="text-xs font-semibold uppercase tracking-wide" style="color: var(--ks-ink);">FPO Dashboard</span>
+      </div>
+      <div class="card warm-shadow overflow-hidden panel flex flex-col">
+        <div class="flex items-center gap-1.5 px-4 py-2.5" style="background: #F2EDE5;">
+          <span class="w-2.5 h-2.5 rounded-full" style="background:#E0605A;"></span>
+          <span class="w-2.5 h-2.5 rounded-full" style="background:#E5B85C;"></span>
+          <span class="w-2.5 h-2.5 rounded-full" style="background:#68B47C;"></span>
+        </div>
+        <div id="dashboard-body" class="flex-1 overflow-y-auto p-4 space-y-3">
+          <p class="text-sm" style="color: var(--ks-muted);">No farmer resolved yet — send a message in the chat to begin.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Column 3: Demo Controls -->
+    <div>
+      <div class="col-header mb-2">
+        <div class="w-4 h-4 rounded-full" style="background: var(--ks-brand);"></div>
+        <span class="text-xs font-semibold uppercase tracking-wide" style="color: var(--ks-ink);">Demo Controls</span>
+      </div>
+      <div class="card warm-shadow panel p-4 flex flex-col gap-3">
+        <button id="climate-btn" class="ctrl-btn">
+          ⛈ Simulate Climate Alert <span class="block text-xs font-normal mt-0.5" style="color: var(--ks-muted);">Runs a real Open-Meteo check right now</span>
+        </button>
+        <button id="upload-btn" class="ctrl-btn">
+          📄 Simulate FPO Batch Upload <span class="block text-xs font-normal mt-0.5" style="color: var(--ks-muted);">Parses a real sample register file</span>
+        </button>
+        <div style="margin-top: auto;">
+          <button id="reset-btn" class="ctrl-btn" style="color: #B23A2E; border-color: #E9C9C0;">
+            Reset entire demo
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- What's happening strip -->
+  <div class="card warm-shadow mt-5 p-5">
+    <p class="text-xs font-semibold uppercase tracking-wide" style="color: var(--ks-amber); letter-spacing: 1px;">What's happening</p>
+    <p id="whats-happening" class="mt-1.5 text-sm" style="color: var(--ks-body);">
+      Send a message as the farmer — this is a real, live agent. Nothing here is scripted; the FPO Dashboard updates as the actual agents respond.
+    </p>
+  </div>
+
+  <!-- Agent activity feed -->
+  <div id="activity-panel" class="hidden card warm-shadow mt-5 p-5">
+    <p class="text-xs font-semibold uppercase tracking-wide" style="color: var(--ks-amber); letter-spacing: 1px;">Agent Activity</p>
+    <p class="text-xs mt-1" style="color: var(--ks-muted);">Every real call made by every agent in this run, oldest first.</p>
+    <div id="activity-log" class="mt-3 space-y-1.5 font-mono text-xs" style="max-height: 240px; overflow-y: auto;"></div>
+  </div>
+
+</div>
+
+<script>
+const API = "";
+function randomSender() {
+  let n = "";
+  for (let i = 0; i < 10; i++) n += Math.floor(Math.random() * 10);
+  return "+91" + n;
+}
+let sender = localStorage.getItem("ks_demo_sender") || randomSender();
+localStorage.setItem("ks_demo_sender", sender);
+document.getElementById("sender-input").value = sender;
+document.getElementById("sender-label").textContent = sender;
+
+let pollSince = 0;
+
+function isDevanagari(text) { return /[ऀ-ॿ]/.test(text); }
+
+function appendBubble(text, outgoing, audioUrl, imagePreviewUrl) {
+  const log = document.getElementById("chat-log");
+  const wrap = document.createElement("div");
+  wrap.className = "flex " + (outgoing ? "justify-end" : "justify-start");
+  const bubble = document.createElement("div");
+  bubble.className = (isDevanagari(text || "") ? "mukta " : "") + "max-w-[80%] rounded-lg px-3 py-2 text-sm shadow-sm";
+  bubble.style.background = outgoing ? "var(--wa-out)" : "#fff";
+  bubble.style.color = "#111";
+  if (imagePreviewUrl) {
+    const img = document.createElement("img");
+    img.src = imagePreviewUrl;
+    img.style.maxWidth = "180px";
+    img.style.borderRadius = "6px";
+    img.style.display = "block";
+    if (text) img.style.marginBottom = "6px";
+    bubble.appendChild(img);
+  }
+  if (text) {
+    const p = document.createElement("div");
+    p.textContent = text;
+    bubble.appendChild(p);
+  }
+  if (audioUrl) {
+    bubble.appendChild(buildScrubber(audioUrl));
+  }
+  wrap.appendChild(bubble);
+  log.appendChild(wrap);
+  log.scrollTop = log.scrollHeight;
+}
+
+function buildScrubber(url) {
+  const wrap = document.createElement("div");
+  wrap.className = "scrubber mt-1";
+  const audio = new Audio(url);
+  const playBtn = document.createElement("button");
+  playBtn.innerHTML = "&#9654;";
+  playBtn.style.fontSize = "10px";
+  playBtn.style.color = "var(--wa-avatar)";
+  const track = document.createElement("div");
+  track.className = "scrubber-track";
+  const fill = document.createElement("div");
+  fill.className = "scrubber-fill";
+  track.appendChild(fill);
+  const time = document.createElement("span");
+  time.textContent = "0:00";
+  time.style.fontSize = "11px";
+  time.style.color = "#667781";
+
+  playBtn.onclick = () => { audio.paused ? audio.play() : audio.pause(); };
+  audio.onplay = () => { playBtn.innerHTML = "&#10073;&#10073;"; };
+  audio.onpause = () => { playBtn.innerHTML = "&#9654;"; };
+  audio.ontimeupdate = () => {
+    const pct = audio.duration ? (audio.currentTime / audio.duration) * 100 : 0;
+    fill.style.width = pct + "%";
+    const s = Math.floor(audio.currentTime);
+    time.textContent = Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
+  };
+  track.onclick = (e) => {
+    const rect = track.getBoundingClientRect();
+    const pct = (e.clientX - rect.left) / rect.width;
+    if (audio.duration) audio.currentTime = pct * audio.duration;
+  };
+  wrap.append(playBtn, track, time);
+  return wrap;
+}
+
+async function pollChat() {
+  try {
+    const res = await fetch(`/api/farmer/poll?sender=${encodeURIComponent(sender)}&since=${pollSince}`);
+    const data = await res.json();
+    for (const m of data.messages) {
+      appendBubble(m.text, false, m.audio_url);
+    }
+    pollSince = data.next;
+  } catch (e) { /* transient network hiccup — next poll retries */ }
+}
+
+let lastDashboardState = null;
+
+async function pollDashboard() {
+  try {
+    const res = await fetch(`/api/farmer/dashboard?sender=${encodeURIComponent(sender)}`);
+    const state = await res.json();
+    lastDashboardState = state;
+    renderDashboard(state);
+  } catch (e) { /* ignore */ }
+}
+
+function card(label, value, brandColor) {
+  return `<div class="rounded-lg p-3" style="background:#FBF8F3; border-left: 3px solid ${brandColor};">
+    <p class="text-[10px] font-bold uppercase tracking-wide" style="color:${brandColor};">${label}</p>
+    <p class="text-sm mt-1" style="color: var(--ks-ink);">${value}</p>
+  </div>`;
+}
+
+function renderDashboard(state) {
+  const body = document.getElementById("dashboard-body");
+  if (!state || !state.updated_at) {
+    body.innerHTML = `<p class="text-sm" style="color: var(--ks-muted);">No farmer resolved yet — send a message in the chat to begin.</p>`;
+    return;
+  }
+  let html = "";
+  const fpo = state.fpo;
+  html += card("Resolved FPO", fpo ? `${fpo.name} — ${fpo.region_name}` : "Not yet resolved (" + (state.identity_status || "unresolved") + ")", "#9F5523");
+  html += card("Recommended Crop", state.crop_plan ? truncate(state.crop_plan) : "No crop-planning question asked yet.", "#9F5523");
+  html += card("Nearest Storage", state.storage ? truncate(state.storage) : "No storage question asked yet.", "#9F5523");
+  html += `<div class="rounded-lg p-3" style="background:#FDF2E2; border-left: 3px solid #C9761F;">
+    <p class="text-[10px] font-bold uppercase tracking-wide" style="color:#9A6021;">Scheme Match</p>
+    <p class="text-sm mt-1" style="color: var(--ks-ink);">${state.schemes ? truncate(state.schemes) : "No scheme question asked yet."}</p>
+  </div>`;
+  body.innerHTML = html;
+  document.getElementById("whats-happening").textContent = state.step_note || "";
+}
+
+function truncate(s, n = 160) { return s.length > n ? s.slice(0, n) + "…" : s; }
+
+async function sendText(text) {
+  if (!text || !text.trim()) return;
+  appendBubble(text, true, null);
+  const form = new FormData();
+  form.append("sender", sender);
+  form.append("text", text);
+  await fetch("/api/farmer/send", { method: "POST", body: form });
+}
+
+async function sendImage(file, caption) {
+  appendBubble(caption || null, true, null, URL.createObjectURL(file));
+  const form = new FormData();
+  form.append("sender", sender);
+  if (caption) form.append("text", caption);
+  form.append("image", file, file.name || "photo.jpg");
+  await fetch("/api/farmer/send", { method: "POST", body: form });
+}
+
+document.getElementById("chat-form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const input = document.getElementById("chat-input");
+  const text = input.value;
+  input.value = "";
+  sendText(text);
+});
+
+document.getElementById("photo-btn").addEventListener("click", () => document.getElementById("photo-input").click());
+document.getElementById("photo-input").addEventListener("change", () => {
+  const file = document.getElementById("photo-input").files[0];
+  if (!file) return;
+  const input = document.getElementById("chat-input");
+  const caption = input.value;
+  input.value = "";
+  sendImage(file, caption);
+  document.getElementById("photo-input").value = "";
+});
+
+document.querySelectorAll(".chip[data-sample]").forEach(btn => {
+  btn.addEventListener("click", () => sendText(btn.dataset.sample));
+});
+
+document.getElementById("sender-apply").addEventListener("click", () => {
+  const v = document.getElementById("sender-input").value.trim();
+  if (!v) return;
+  sender = v;
+  localStorage.setItem("ks_demo_sender", sender);
+  document.getElementById("sender-label").textContent = sender;
+  document.getElementById("chat-log").innerHTML = "";
+  pollSince = 0;
+});
+
+document.getElementById("reset-btn").addEventListener("click", async () => {
+  await fetch("/demo/reset", { method: "POST" });
+  document.getElementById("chat-log").innerHTML = "";
+  pollSince = 0;
+  sender = randomSender();
+  localStorage.setItem("ks_demo_sender", sender);
+  document.getElementById("sender-input").value = sender;
+  document.getElementById("sender-label").textContent = sender;
+  renderDashboard(null);
+});
+
+document.getElementById("play-demo-btn").addEventListener("click", () => {
+  sendText("Namaste, I farm grapes near Niphad in Nashik — what should I do with this season's harvest?");
+});
+
+function resolvedFpoId() {
+  return lastDashboardState && lastDashboardState.fpo ? lastDashboardState.fpo.id : null;
+}
+
+document.getElementById("climate-btn").addEventListener("click", async (e) => {
+  const btn = e.currentTarget;
+  const fpoId = resolvedFpoId();
+  btn.classList.add("active");
+  document.getElementById("whats-happening").textContent =
+    "Running a real Open-Meteo forecast check" + (fpoId ? " for the resolved FPO" : " for every seeded FPO") + "…";
+  try {
+    const url = "/api/climate/check" + (fpoId ? `?fpo_id=${fpoId}` : "");
+    const res = await fetch(url, { method: "POST" });
+    const data = await res.json();
+    document.getElementById("whats-happening").textContent = data.new_alerts.length
+      ? `Real weather check raised ${data.new_alerts.length} new alert(s): ${data.new_alerts.map(a => a.kind).join(", ")}. Ask the farmer chat about weather to see it grounded in the answer.`
+      : `Checked ${data.checked.join(", ")} against the real current forecast — no threshold crossed right now (this is a genuine check, not a scripted alert).`;
+  } finally {
+    setTimeout(() => btn.classList.remove("active"), 400);
+  }
+});
+
+document.getElementById("upload-btn").addEventListener("click", async (e) => {
+  const btn = e.currentTarget;
+  const fpoId = resolvedFpoId() || "fpo_1";
+  btn.classList.add("active");
+  document.getElementById("whats-happening").textContent = "Parsing a sample FPO register file with the real ingestion agent…";
+  try {
+    const res = await fetch(`/api/fpo/upload-sample?fpo_id=${fpoId}`, { method: "POST" });
+    const batch = await res.json();
+    document.getElementById("whats-happening").textContent =
+      `Ingestion agent staged ${batch.row_count} farmer row(s) from a sample register — nothing merges until FPO staff approve it on the /fpo dashboard's "Recent uploads" panel.`;
+  } finally {
+    setTimeout(() => btn.classList.remove("active"), 400);
+  }
+});
+
+const activityPanel = document.getElementById("activity-panel");
+let activityPolling = null;
+
+function fmtTime(ts) {
+  const d = new Date(ts * 1000);
+  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+}
+
+async function pollActivity() {
+  try {
+    const res = await fetch("/api/agentlog?limit=50");
+    const events = await res.json();
+    const log = document.getElementById("activity-log");
+    log.innerHTML = events.map(e =>
+      `<div><span style="color: var(--ks-muted);">${fmtTime(e.ts)}</span> <span style="color: var(--ks-brand); font-weight: 600;">${e.agent}</span> ${e.summary}</div>`
+    ).join("") || `<p style="color: var(--ks-muted);">No activity yet.</p>`;
+    log.scrollTop = log.scrollHeight;
+  } catch (e) { /* ignore */ }
+}
+
+document.getElementById("activity-btn").addEventListener("click", () => {
+  activityPanel.classList.toggle("hidden");
+  if (!activityPanel.classList.contains("hidden")) {
+    pollActivity();
+    if (!activityPolling) activityPolling = setInterval(pollActivity, 2000);
+  } else if (activityPolling) {
+    clearInterval(activityPolling);
+    activityPolling = null;
+  }
+});
+
+// Voice recording via MediaRecorder
+let mediaRecorder = null;
+let recordedChunks = [];
+let recording = false;
+
+document.getElementById("mic-btn").addEventListener("click", async () => {
+  const micBtn = document.getElementById("mic-btn");
+  if (!recording) {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      recordedChunks = [];
+      mediaRecorder = new MediaRecorder(stream);
+      mediaRecorder.ondataavailable = (e) => recordedChunks.push(e.data);
+      mediaRecorder.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        const blob = new Blob(recordedChunks, { type: "audio/webm" });
+        appendBubble("🎤 Voice note", true, null);
+        const form = new FormData();
+        form.append("sender", sender);
+        form.append("audio", blob, "note.webm");
+        await fetch("/api/farmer/send", { method: "POST", body: form });
+      };
+      mediaRecorder.start();
+      recording = true;
+      micBtn.style.background = "#E0605A";
+    } catch (e) {
+      alert("Microphone access is needed to send a voice note. You can still type your question.");
+    }
+  } else {
+    mediaRecorder.stop();
+    recording = false;
+    micBtn.style.background = "var(--wa-avatar)";
+  }
+});
+
+setInterval(pollChat, 1500);
+setInterval(pollDashboard, 2000);
+pollDashboard();
+</script>
+
+</body>
+</html>
