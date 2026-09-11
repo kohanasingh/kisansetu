@@ -3,7 +3,8 @@
 **Har Kisan tak, Har Jawab.**
 
 KisanSetu is a **Smart India Hackathon (SIH) 2025 winning project**. It turns the farmer and crop records an FPO (Farmer Producer Organization) already has sitting in files into AI-generated advisory for its farmers, and gives those farmers a voice-first assistant they can reach on their own real WhatsApp, in their own language.
-- Live Demo -  `https://kisansetu-zplmpppmgq-el.a.run.app/`
+
+**Live Demo** -  https://kisansetu-zplmpppmgq-el.a.run.app/
 
 ## The problem
 
