@@ -27,7 +27,7 @@ Runs on Cloud Run's free tier with scale-to-zero — see [Deployment](#deploymen
 
 ## Tech stack
 
-- **Backend:** FastAPI + Uvicorn (Python), single in-process app — no external database (see [Known limitations](#known-limitations--out-of-scope)).
+- **Backend:** FastAPI + Uvicorn (Python), single in-process app — no external database.
 - **Language models:** OpenAI GPT-4o for intent classification, grounded Q&A, and Vision (document/photo reasoning); Whisper (`whisper-1`) for speech-to-text; `gpt-4o-mini-tts` for spoken replies. Google Gemini (`gemini-flash-lite-latest`) is used narrowly — as the primary reasoning model for the FPO advisory agent (falling back to GPT-4o if Gemini is unavailable) and for a secondary translation quality-pass — everything else stays on OpenAI.
 - **Weather:** Open-Meteo — free, no API key, real forecasts (not mocked), evaluated against fixed thresholds for heavy rain / storm / drought risk.
 - **Ingestion:** pandas + openpyxl for Excel/CSV parsing; GPT-4o Vision directly for scanned paper registers (no separate OCR engine).
